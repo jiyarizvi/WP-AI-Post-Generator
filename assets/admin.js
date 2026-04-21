@@ -1,49 +1,61 @@
 jQuery(document).ready(function ($) {
-    const $form   = $('#cg-ai-post-generator-form');
-    const $btn    = $('#cg_ai_generate_btn');
+    const $form = $('#cg-ai-post-generator-form');
+    const $btn = $('#cg_ai_generate_btn');
     const $status = $('.cg-ai-status');
     const $previewWrap = $('#cg_ai_preview');
     const $previewContent = $('.cg-ai-preview-content');
 
+    if (!$form.length) return;
+
     $form.on('submit', function (e) {
         e.preventDefault();
 
-        $status.text('Generating…');
-        $btn.prop('disabled', true);
+        $status.text('');
         $previewWrap.hide();
-        $previewContent.empty();
+        $previewContent.html('');
 
-        const formData = {
+        const formData = $form.serializeArray();
+        const data = {
             action: 'cg_ai_generate_post',
-            title: $('#cg_ai_title').val(),
-            instructions: $('#cg_ai_instructions').val(),
-            post_type: $('#cg_ai_post_type').val()
         };
 
-        formData[CG_Ai_Post_Generator.nonce_name || 'cg_ai_post_generator_nonce'] = CG_Ai_Post_Generator.nonce;
+        formData.forEach(function (field) {
+            data[field.name] = field.value;
+        });
 
-        $.post(CG_Ai_Post_Generator.ajax_url, formData)
+        data['cg_ai_post_generator_nonce'] = CG_Ai_Post_Generator.nonce;
+
+        $btn.prop('disabled', true).text('Generating...');
+        $status.text('Talking to OpenAI…');
+
+        $.post(CG_Ai_Post_Generator.ajax_url, data)
             .done(function (response) {
-                if (response.success) {
-                    $status.text(response.data.message);
-                    if (response.data.content) {
-                        $previewContent.html(response.data.content);
-                        $previewWrap.show();
-                    }
-                    if (response.data.edit_link) {
-                        $status.append(
-                            ' – <a href="' + response.data.edit_link + '">Edit draft</a>'
-                        );
-                    }
-                } else {
-                    $status.text(response.data && response.data.message ? response.data.message : 'Error generating content.');
+                if (!response || !response.success) {
+                    $status.text(response && response.data && response.data.message ? response.data.message : 'Error generating content.');
+                    return;
+                }
+
+                $status.text(response.data.message || 'Draft(s) created.');
+
+                if (response.data.content) {
+                    $previewContent.html(response.data.content);
+                    $previewWrap.show();
+                }
+
+                if (response.data.edit_link) {
+                    const link = $('<a>')
+                        .attr('href', response.data.edit_link)
+                        .addClass('button button-secondary')
+                        .css('margin-left', '8px')
+                        .text('Open first draft');
+                    $status.append(link);
                 }
             })
             .fail(function () {
-                $status.text('Request failed.');
+                $status.text('Request failed. Check console or server logs.');
             })
             .always(function () {
-                $btn.prop('disabled', false);
+                $btn.prop('disabled', false).text('Generate Draft(s)');
             });
     });
 });
